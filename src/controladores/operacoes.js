@@ -1,5 +1,6 @@
 let { contas, depositos, saques, transferencias } = require('../bancodedados');
-const { format } = require('date-fns')
+const { verificarCampos, verificarSenha, verificarExistenciaConta, dataFormatada } = require('./controledeoperacoes')
+
 
 const listarContas = (req, res) => {
     const senha = req.query.senha_banco
@@ -16,11 +17,7 @@ const criarContaBancaria = (req, res) => {
     const campoObrigatorio = { nome, cpf, data_nascimento, telefone, email, senha };
     const cadastro = req.body;
 
-    for (const campo in campoObrigatorio) {
-        if (!campoObrigatorio[campo]) {
-            return res.status(400).json(`O campo ${campo} é obrigatório`)
-        }
-    }
+    verificarCampos(campoObrigatorio, res);
 
     const usuarioExistente = contas.find(conta => conta.usuario.cpf === cpf || conta.usuario.email === email);
     if (usuarioExistente) {
@@ -34,30 +31,44 @@ const criarContaBancaria = (req, res) => {
     }
 
     contas.push(novaConta);
+
+    return res.status(204).send();
 }
 
 const atualizarConta = (req, res) => {
     const { numeroConta } = req.params;
     const { nome, cpf, data_nascimento, telefone, email, senha } = req.body;
+    const contaCadastrada = contas.find(conta => Number(conta.numero) === Number(numeroConta));
+    const emailExistente = contas.find(conta => conta.usuario.email === email);
+    const cpfExistente = contas.find(conta => Number(conta.usuario.cpf) === Number(cpf));
 
-    const usuarioExistente = contas.find(conta => conta.usuario.cpf === cpf || conta.usuario.email === email);
-    if (usuarioExistente) {
-        return res.status(400).json({ mensagem: 'Já existe uma conta com o CPF ou Email informado' });
-    }
-
-    const contaCadastrada = contas.find(conta => conta.numero === numeroConta);
+    verificarExistenciaConta(req, res, numeroConta, cpfExistente, emailExistente);
 
     if (!contaCadastrada) {
         return res.status(404).json({ mensagem: 'Conta não encontrada.' })
     }
 
-    contaCadastrada.usuario.nome = nome;
-    contaCadastrada.usuario.data_nascimento = data_nascimento;
-    contaCadastrada.usuario.telefone = telefone;
-    contaCadastrada.usuario.senha = senha;
+    function atualizarUsuario(contaCadastrada, nome, cpf, data_nascimento, telefone, email, senha, res) {
+        if (email) {
+            contaCadastrada.usuario.email = email;
+        }
 
-    return res.status(204).send();
+        if (cpf) {
+            contaCadastrada.usuario.cpf = cpf;
+        }
+
+        contaCadastrada.usuario.nome = nome;
+        contaCadastrada.usuario.data_nascimento = data_nascimento;
+        contaCadastrada.usuario.telefone = telefone;
+        contaCadastrada.usuario.senha = senha;
+
+        return res.status(204).json();
+    }
+
+    atualizarUsuario(contaCadastrada, nome, cpf, data_nascimento, telefone, email, senha, res)
+
 }
+
 
 
 const excluirConta = (req, res) => {
@@ -84,20 +95,13 @@ const depositarValor = (req, res) => {
     const { numero_conta, valor } = req.body;
     const campoObrigatorio = { numero_conta, valor };
 
-    for (const campo in campoObrigatorio) {
-        if (!campoObrigatorio[campo]) {
-            return res.status(400).json(`O campo ${campo} é obrigatório`)
-        }
-    }
+    verificarCampos(campoObrigatorio, res);
 
     const contaCadastrada = contas.find(conta => conta.numero === numero_conta);
 
     if (!contaCadastrada) {
         return res.status(404).json({ mensagem: 'Conta não encontrada.' });
     }
-
-    const data = new Date();
-    const dataFormatada = format(data, 'yyyy-MM-dd HH:mm:ss');
 
     const novoDeposito = {
         data: dataFormatada,
@@ -119,18 +123,12 @@ const sacarValor = (req, res) => {
     const { numero_conta, valor, senha } = req.body;
     const campoObrigatorio = { numero_conta, valor, senha };
 
-    for (const campo in campoObrigatorio) {
-        if (!campoObrigatorio[campo]) {
-            return res.status(400).json(`O campo ${campo} é obrigatório`)
-        }
-    };
+    verificarCampos(campoObrigatorio, res);
 
     const contaCadastrada = contas.find(conta => conta.numero === numero_conta);
     const { usuario } = contaCadastrada;
 
-    if (senha !== usuario.senha) {
-        return res.status(400).json({ mensagem: 'Senha inválida.' })
-    };
+    verificarSenha(usuario, senha, res);
 
     if (!contaCadastrada) {
         return res.status(404).json({ mensagem: 'Conta não encontrada.' })
@@ -139,8 +137,6 @@ const sacarValor = (req, res) => {
     if (contaCadastrada.saldo <= 0) {
         return res.status(400).json({ mensagem: 'O valor não pode ser menor que zero!' })
     };
-    const data = new Date();
-    const dataFormatada = format(data, 'yyyy-MM-dd HH:mm:ss');
 
     const saldoDisponivel = contaCadastrada.saldo - valor;
 
@@ -167,11 +163,7 @@ const trasnferirValor = (req, res) => {
     const contasInformadas = { origem, destino }
     const { usuario } = origem;
 
-    for (const campo in campoObrigatorio) {
-        if (!campoObrigatorio[campo]) {
-            return res.status(400).json(`O campo ${campo} é obrigatório`)
-        }
-    }
+    verificarCampos(campoObrigatorio, res);
 
     for (const campo in contasInformadas) {
         if (!contasInformadas[campo]) {
@@ -179,16 +171,11 @@ const trasnferirValor = (req, res) => {
         }
     }
 
-    if (senha !== usuario.senha) {
-        return res.status(400).json({ mensagem: 'Senha inválida.' })
-    }
+    verificarSenha(usuario, senha, res);
 
     if (origem.saldo <= 0) {
         return res.status(400).json({ mensagem: 'Saldo insuficiente!' })
     }
-
-    const data = new Date();
-    const dataFormatada = format(data, 'yyyy-MM-dd HH:mm:ss');
 
     const saldoDisponivel = origem.saldo - valor;
     const destinoDisponivel = destino.saldo + valor;
@@ -213,18 +200,12 @@ const saldo = (req, res) => {
     const numeroConta = req.query.numero_conta;
     const campoObrigatorio = { senha, numeroConta };
 
-    for (const campo in campoObrigatorio) {
-        if (!campoObrigatorio[campo]) {
-            return res.status(400).json(`O campo ${campo} é obrigatório`)
-        }
-    }
+    verificarCampos(campoObrigatorio, res);
 
     const contaCadastrada = contas.find(conta => conta.numero === numeroConta);
     const { usuario } = contaCadastrada;
 
-    if (senha !== usuario.senha) {
-        return res.status(400).json({ mensagem: 'Senha inválida.' })
-    }
+    verificarSenha(usuario, senha, res);
 
     if (!contaCadastrada) {
         return res.status(404).json('Conta bancária não encontrada!')
@@ -238,18 +219,12 @@ const extrato = (req, res) => {
     const numeroConta = req.query.numero_conta;
     const campoObrigatorio = { senha, numeroConta };
 
-    for (const campo in campoObrigatorio) {
-        if (!campoObrigatorio[campo]) {
-            return res.status(400).json(`O campo ${campo} é obrigatório`)
-        }
-    }
+    verificarCampos(campoObrigatorio, res);
 
     const contaCadastrada = contas.find(conta => conta.numero === numeroConta);
     const { usuario } = contaCadastrada;
 
-    if (senha !== usuario.senha) {
-        return res.status(400).json({ mensagem: 'Senha inválida.' })
-    }
+    verificarSenha(usuario, senha, res);
 
     depositos = depositos.filter(deposito => deposito.numero_conta === contaCadastrada.numero);
     saques = saques.filter(saque => saque.numero_conta === contaCadastrada.numero);
