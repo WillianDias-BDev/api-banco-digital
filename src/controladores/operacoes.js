@@ -222,6 +222,11 @@ const extrato = (req, res) => {
     verificarCampos(campoObrigatorio, res);
 
     const contaCadastrada = contas.find(conta => conta.numero === numeroConta);
+
+    if (!contaCadastrada) {
+        return res.status(404).json({ mensagem: 'Conta não encontrada.' })
+    }
+
     const { usuario } = contaCadastrada;
 
     verificarSenha(usuario, senha, res);
