@@ -142,6 +142,4 @@ Os dados são persistidos em memória, no objeto existente dentro do arquivo `ba
 
 Willian Dias - [GitHub](https://github.com/WillianDias-BDev)
 
-## Licença
 
-Este projeto está licenciado sob a Licença MIT - consulte o arquivo [LICENSE.md](LICENSE.md) para obter detalhes.
